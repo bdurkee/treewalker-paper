@@ -54,9 +54,12 @@ The compiler, verification, and proof tools have been researched and developed o
 \section{Related Work}
 \vspace{-2pt}
 
-Since the emerge of the first high level language compilers, abstract syntax trees and tree traversal patterns have generated a large body of research. While the concept of an AST and its usage is well established, the maintainability and reusability of AST implementation code remains a relevant topic in the software engineering community. In this section we consider several well known tools capable of generating ASTs, and the mechanisms they provide for tree traversal.
+Since the emergence of the first compiled, high level languages, abstract syntax trees and tree traversal patterns have garnered both an extensive amount of study, and large (still growing) body of research. While the concept of ASTs and their usage is well established, AST construction, reusability, and long term maintenance remain relevant topics in the software engineering community [cite?]. In this section we consider several well known, existing parsing tools capable of generating ASTs, emphasizing the maintainability  the mechanisms they provide for tree traversal.
+% we examine the cost of maintaining the AST with the tool
+% we examine any walking tools that might help users traverse the tree
+% we
 
-The first tool that comes to mind is the popular GNU ``compiler compiler," Bison\footnote{Bison has replaced YACC (Yet Another Compiler Compiler)}. 
+The first tool that comes to mind is the popular GNU ``compiler compiler," Bison\footnote{Bison has replaced YACC (Yet Another Compiler Compiler)} \cite{levine:1992}. 
 
 The popular compiler compiler YACC is able to generate a parser which produces a syntax tree. It can generate a tree walker as well, but is limited by a number of factors. The tree walker is generated from a definition file that uses special YACC syntax. The definition file must be updated in tandem with each change to the grammar of the language, and the tree walker code must be regenerated. This puts a strain on maintainability, particularly for developers who might be working on the later stages of the compiler's pipeline such as population or semantic analysis. Small tweaks to the grammar can percolate through the pipeline and break existing code in these later stages. 
 
@@ -64,24 +67,179 @@ One example of innovation on the basic model set by YACC is demonstrated by the 
 
 ANTLR (Another Tool for Language Recognition) is another common parsing tool used for tree generation and traversal. The compiler discussed in this paper is based on ANTLR v3, upgraded from previous versions. While ANTLR v4 offers a new approach incorporating sax-dom event style parse tree listeners, we needed a quicker turnaround time than re-writing the grammar and significant portions of the compiler would allow. While there have been many innovations int he field of compiler tree walking, this paper is more specifically about the use of Java reflection to quickly allow more flexibility in accessing an existing tree structure.
 
+% -----------------------------------------------------------------------------------------------
+%	Motivation
+% -----------------------------------------------------------------------------------------------
+
 \section{Initial Implementation and Motivation}
 The pipeline for compiling high-level code begins with lexing, parsing, and building an AST. This data structure is a logical representation of the source code, and it will be used in nearly every subsequent stage of the compilation pipeline. The need to traverse the tree in each stage presents a potential problem of code duplication. the traversal method will not change, but separating it from the logic of the populator, analyzer, and other components is a non-trivial task. This task, however, was simplified by a widely accepted design pattern from the gang of four \cite{gamma:1995}. This ``visitor" pattern was used, albeit imperfectly, in the initial development of the RESOLVE compiler.
 
 The design of the tree traversal component's first iteration bears close resemblance to the visitor pattern: Each class representing a type of node in the syntax tree contains a \texttt{accept} method which can dispatch the appropriate logic through polymorphism. However, the algorithm for traversal was not properly separated from the data structure as the visitor pattern requires.
 
-The purpose of the visitor pattern is to decouple a data structure from the logic operating on it. While manifestations of this pattern may vary, they must necessarily adhere to that specific design principle of separation. During the initial development of the RESOLVE compiler, a few shortcuts were made to solve surface issues with the visitor implementation. Figure 1 illustrates a snipped of the resulting code.
+The purpose of the visitor pattern is to decouple a data structure from the logic operating on it. While manifestations of this pattern may vary, they must necessarily adhere to that specific design principle of separation. During the initial development of the RESOLVE compiler, a few shortcuts were made to solve surface issues with the visitor implementation. \ref{fig:flawedvisitorexample} illustrates a snipped of the resulting code.
+
+\begin{figure}
+\centering
+\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[language=java]
+public abstract
+	class ResolveConceptualVisitor {
+    visitProcedureDecl(
+    		ProcedureDecl e) {}
+}
+
+public abstract 
+	class ResolveConceptualElement {
+    abstract void accept(
+        ResolveConceptualVisitor e);
+}
+
+public class ProcedureDecl
+	extends ResolveConceptualElement {	
+    List<Stmt> myStatements;
+    
+    public void accept(
+    		ResolveConceptualVisitor e) {
+        v.visitProcedureDecl(this);
+    }
+}
+\end{lstlisting}
+\end{minipage}\quad
+\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[language=java]
+public class Analyzer
+	extends ResolveConceptualVisitor {
+	
+    public void visitProcedureDecl(
+  			ProcedureDecl e) {
+        table.beginProcedureScope();
+        visitStmtList(e.getStatements();
+	table.endProcedureScope();
+    }
+    
+    private void visitStmtList(
+    		List<Stmt> e) {
+        for (Stmt s : e.getStatements()) {
+            visitStmt(s);
+        }
+    }
+    
+    public void visitStmt(Stmt e) {
+        e.accept(this);
+    }
+}
+\end{lstlisting}
+\end{minipage}
+\caption{A flawed implementation of the visitor pattern.}
+\label{fig:flawedvisitorexample}
+\end{figure}
 
 The traversal logic, according to visitor pattern, should be contained within the \texttt{accept} visitor method. In this initial implementation, it has been moved to the visit method contained in the \texttt{ResolveConceptualVisitor} component. Consequently, every \texttt{ResolveConceptualVisitor} will bear the responsibility of traversing the syntax tree. Thus, most changes in the trees structure, no matter how minor, necessitates large, cross component refactors.
 
-The reason for the appearance of this critical flaw remains unknown, but it seems likely to be related to the singular visit method rather than pre- and post- traversal visits. Consider the same code with that minor change, shown in Figure 2.
+\begin{figure}[!htb]
+\centering
+\includegraphics[scale=.60]{figures/flawed_visitor_organization.pdf}
+\caption{A high level look at the organization of the flawed visitor.}
+\label{fig:flawedvisitororganization}
+\end{figure}
 
+The reason for the appearance of this critical flaw is unknown, but it seems likely to be related to the singular visit method rather than pre-post traversal visits. Consider the same code with that minor change, shown in \ref{fig:fixedvisitorexample}
+
+\begin{figure}[!htb]
+\centering
+\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[language=java]
+public abstract
+	class ResolveConceptualVisitor {
+    preProcedureDecl(ProcedureDecl e) {}
+    postProcedureDecl(ProcedureDecl e) {}
+}
+
+public abstract 
+	class ResolveConceptualElement {
+    abstract void accept(
+        ResolveConceptualVisitor e);
+}
+
+public class ProcedureDecl
+	extends ResolveConceptualElement {	
+    List<Stmt> myStatements;
+    
+    public void accept(
+    	  ResolveConceptualVisitor e) {
+        v.preProcedureDecl(this);
+        for (Stmt s : e.getStatements()) {
+            s.accept();
+        }
+        v.postProcedureDecl(this);
+    }
+}
+\end{lstlisting}
+\end{minipage}\quad
+\begin{minipage}{.45\textwidth}
+\begin{lstlisting}[language=java]
+public abstract class Stmt
+	extends ResolveConceptualVisitor {
+    abstract void accept(
+    	ResolveConceptualVisitor e) {}
+}
+
+public class Analyzer
+	extends ResolveConceptualElement {
+	
+    public void preProcedureDecl(
+  			ProcedureDecl e) {
+        table.beginProcedureScope();
+    }
+    
+    public void postProcedureDecl(
+    			ProcedureDecl e) {
+        table.endProcedureScope();
+    }        
+}
+\end{lstlisting}
+\end{minipage}
+\caption{A flawed implementation of the visitor pattern.}
+\label{fig:fixedvisitorexample}
+\end{figure}
+
+\begin{figure}[!htb]
+\centering
+\includegraphics[scale=.60]{figures/fixed_visitor_organization.pdf}
+\caption{A high level look at the organization of the fixed visitor.}
+\label{fig:flawedvisitororganization}
+\end{figure}
+
+The \texttt{ResolveConceptualVisitor} now has fewer methods and the traversal logic is properly decoupled from the visitor logic.
+
+% -----------------------------------------------------------------------------------------------
+%	Contribution
+% -----------------------------------------------------------------------------------------------
 
 \section{A Dynamic Tree Walker}
 While the corrections demonstrated in \ref{fig:visit} could be made, we decided to pursue a third, even more robust implementation that would exist independently of--and work simultaneously with--existing code. We created an entirely new class simply named TreeWalker. This new traversal component is completely decoupled from the data structure and dynamically analyzes the structure at runtime using Java reflection.
 
 Instead of reusing the existing ResolveConceptualVisitor class, we created a new abstract visitor class for the dynamic tree walker--TreeWalkerVisitor. This decision allows the legacy code to continue to work alongside the new dynamic traversal component. One tradeoff is that future visitors have to be entirely rewritten (or at least heavily refactored), but the concern is mitigated, as old components can continue to work until the new components are ready to be dropped in place.
 
-With two new components in place, the Tree Walker can then call the visitor methods as it traverses the tree. Figure 3 is a simplified version of the traversal algorithm.
+With two new components in place, the Tree Walker can then call the visitor methods as it traverses the tree. \ref{fig:newvisit} is a simplified version of the traversal algorithm.
+
+\begin{figure}[!htb]
+\centering
+\begin{minipage}{.80\textwidth}
+\begin{lstlisting}[language=java]
+public void visit(ResolveConceptualElement e) {
+    invokeVisitorMethods("pre", e);
+    
+    for (ResolveConceptualElement node : e.getChildren()) {
+        visit(node);
+    }
+    invokeVisitorMethods("post", e);
+}
+\end{lstlisting}
+\end{minipage}
+\caption{A revised \texttt{visit} method.}
+\label{fig:newvisit}
+\end{figure}
 
 The \texttt{visit} method is a simple recursive, depth-first traversal of the AST. At each level, the procedure will make ``pre" call before visiting children, and a ``post" call after. These calls are made via \texttt{invokeVisitorMethods} -- a local method used to construct the appropriate visitor name and dispatch the correct call using reflection techniques.
 
@@ -124,6 +282,10 @@ public List<ResolveConceptualElement getChildren() {
 
 The visitors we use include a number of typical compiler components and are indicated in \ref{fig:getchildren}. Each visitor can override as many or as few visit methods as needed, making the creation of a new visitor quite simple. this has many advantages for maintainability as well. Unlike the original implementation of the visitor pattern, the tree walker allows new methods to be added to a visitor without the need to consider existing code. All the traversal logic is contained within the tree walker class. 
 
+% -----------------------------------------------------------------------------------------------
+%	Application
+% -----------------------------------------------------------------------------------------------
+
 \section{Application: Code Generation}
 \vspace{-2pt}
 
@@ -151,7 +313,7 @@ Shown in \ref{fig:translationflow} is a high level depiction of the steps taken 
 
 \begin{figure}
 \centering
-%\includegraphics[scale=.40]{figures/ast_traversal2.pdf}
+\includegraphics[scale=.40]{figures/ast_traversal2.pdf}
 \caption{The general flow of information from the AST (first), to user defined templates (middle), ending with formed output (last).}
 \label{fig:translationflow}
 \end{figure}
@@ -161,6 +323,18 @@ In the context of RESOLVE to C translation, these templates, when filled during 
 That is, the only actual work being performed within the C translator is forwarding information collected from individual \texttt{ResolveConceptualElement}s, to a series of externally defined templates. This allows us to exploit (in design pattern parlance) a strict model view controller (MVC) separation in the translator's codebase between the mechanism that does the AST visiting (controller), the individual \texttt{ResolveConceptualElement}s from which we're adding information to templates (model), and the external file containing all available C language templates which shape our output (view) \cite{krasner:1988}.
 
 We feel the approach to tree walking in the paper lends itself well to this strategy of translation, as this separation allows us to easily iterate changes to our generated C (or Java!) code without needing to concern ourselves with the compiler or translator itself.
+
+% -----------------------------------------------------------------------------------------------
+%	Conclusion
+% -----------------------------------------------------------------------------------------------
+
+\section{Conclusion}
+
+% -----------------------------------------------------------------------------------------------
+%	Acknowledgments
+% -----------------------------------------------------------------------------------------------
+
+\section{Acknowledgements}
 
 \bibliography{treewalkreferences}
 
