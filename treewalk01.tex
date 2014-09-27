@@ -1,8 +1,10 @@
 %Fall 2014 -- Tree walker paper
 \documentclass[times]{speauth}
 \bibliographystyle{wileyj}
-
+\usepackage{listings}
+\lstset{basicstyle=\tiny\ttfamily,columns=fullflexible,keepspaces=true}
 \usepackage[colorlinks,bookmarksopen,bookmarksnumbered,citecolor=red,urlcolor=red]{hyperref}
+
 \newcommand\BibTeX{{\rmfamily B\kern-.05em \textsc{i\kern-.025em b}\kern-.08em
 T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 
@@ -12,11 +14,15 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 \runningheads{B. Durkee, D. T. Welch, and M. Sitaraman}{Software Evolution and the Visitor Pattern: Motivation}
 \title{Software Evolution and the Visitor Pattern: Motivation for a Dynamic Tree Walker}
 
-\author{Blair Durkee\corraddr, Daniel T. Welch, Murali Sitaraman}
+\author{Blair Durkee\corrauth, Daniel T. Welch, Murali Sitaraman}
 \address{School of Computing, Clemson University, South Carolina, SC, 
  29634, USA}
 
 \corraddr{Blair Durkee, School of Computing, Clemson University, Clemson SC, 29631, USA.}
+
+% -----------------------------------------------------------------------------------------------
+%	Abstract
+% -----------------------------------------------------------------------------------------------
 
 \begin{abstract}
 This paper describes our experiences re-engineering legacy software leading up to, and resulting in the creation of a reusable, reflection-based (dynamic) tree traversal mechanism. The mechanism we describe has come to play a central role in an ongoing software engineering project that that has slowly evolved from a relatively simple language translator, to a sophisticated verifying compiler over a period of nearly fifteen years. The source language we discuss is RESOLVE (Reusable Software Language with Verification): A `research language' designed for formal specification and verification of object-oriented programs. Being at its core a research language,  frequent and continual language-level evolution posed major maintainability challenges to the compiler. Everything from major to minor syntax changes (or additions) would often necessitate compiler wide refactors, spanning the abstract syntax representation, to the logic dictating abstract syntax traversal and all associated subcomponents. Given the development bottleneck posed by this propagation, we decided to build a novel, reflection based, generic walker that utilizes a relatively common pre-post variation of the visitor pattern. We describe this walker, some improvements to its initial design, and conclude with an application, illustrating its important role in code generation for RESOLVE's multiple target languages (C and Java). 
@@ -25,8 +31,11 @@ This paper describes our experiences re-engineering legacy software leading up t
 \keywords{visitor; design pattern; compiler; language translation}
 
 \maketitle
-
 \vspace{-6pt}
+
+% -----------------------------------------------------------------------------------------------
+%	Introduction
+% -----------------------------------------------------------------------------------------------
 
 \section{Introduction}
 \vspace{-2pt}
@@ -38,10 +47,18 @@ The compiler, verification, and proof tools have been researched and developed o
 
 \vspace{-6pt}
 
+% -----------------------------------------------------------------------------------------------
+%	Related Work
+% -----------------------------------------------------------------------------------------------
+
 \section{Related Work}
 \vspace{-2pt}
 
-Abstract syntax trees and tree traversal have been the topic of research since the first high level language compilers. While the concept of an AST and its usage is well established, the maintainability and reusability of AST implementation code remains the subject of ongoing work. The popular compiler compiler YACC is able to generate a parser which produces a syntax tree. It can generate a tree walker as well, but is limited by a number of factors. The tree walker is generated from a definition file that uses special YACC syntax. The definition file must be updated in tandem with each change to the grammar of the language, and the tree walker code must be regenerated. This puts a strain on maintainability, particularly for developers who might be working on the later stages of the compiler's pipeline such as population or semantic analysis. Small tweaks to the grammar can percolate through the pipeline and break existing code in these later stages. 
+Since the emerge of the first high level language compilers, abstract syntax trees and tree traversal patterns have generated a large body of research. While the concept of an AST and its usage is well established, the maintainability and reusability of AST implementation code remains a relevant topic in the software engineering community. In this section we consider several well known tools capable of generating ASTs, and the mechanisms they provide for tree traversal.
+
+The first tool that comes to mind is the popular GNU ``compiler compiler," Bison\footnote{Bison has replaced YACC (Yet Another Compiler Compiler)}. 
+
+The popular compiler compiler YACC is able to generate a parser which produces a syntax tree. It can generate a tree walker as well, but is limited by a number of factors. The tree walker is generated from a definition file that uses special YACC syntax. The definition file must be updated in tandem with each change to the grammar of the language, and the tree walker code must be regenerated. This puts a strain on maintainability, particularly for developers who might be working on the later stages of the compiler's pipeline such as population or semantic analysis. Small tweaks to the grammar can percolate through the pipeline and break existing code in these later stages. 
 
 One example of innovation on the basic model set by YACC is demonstrated by the compiler compiler SableCC [2]. SableCC provides the tools necessary to convert a BNF grammar into Java packages for lexing, parsing, and tree analysis. In addition, it creates a Java class for each node in the AST. The analysis package defines an abstract class which allows for efficient and foolproof implementation of tree traversal logic. The process of parsing the code and walking the tree is all done by generated code, and the developer needs only to implement specific visitor methods to create the analysis and code generation portions of the compiler.
 
@@ -78,13 +95,13 @@ The logic for retrieving a node's children is contained in the \texttt{getChildr
 
 \begin{figure}[!htb]
 \centering
-\begin{verbatim}
+\begin{minipage}{.80\textwidth}
+\begin{lstlisting}[language=java]
 public List<ResolveConceptualElement getChildren() {
     List<ResolveConceptualElement> children = new LinkedList<>();
     ArrayList<Field> fields = new ArrayList<>();
     
-    // populate "fields" with the declared fields of the 
-    // object's defining class
+    //Populate "fields" with the declared fields of the object's defining class
     
     Iterator<Field> iterFields = fields.iterator();
     while(iterFields.hasNext()) {
@@ -98,7 +115,8 @@ public List<ResolveConceptualElement getChildren() {
         }
     }
 }
-\end{verbatim}
+\end{lstlisting}
+\end{minipage}
 \caption{An implementation of \texttt{getChildren}.}
 \label{fig:getchildren}
 \end{figure}
