@@ -54,12 +54,9 @@ The compiler, verification, and proof tools have been researched and developed o
 \section{Related Work}
 \vspace{-2pt}
 
-Since the emergence of the first compiled, high level languages, abstract syntax trees and tree traversal patterns have garnered both an extensive amount of study, and large (still growing) body of research. While the concept of ASTs and their usage is well established, AST construction, reusability, and long term maintenance remain relevant topics in the software engineering community [cite?]. In this section we consider several well known, existing parsing tools capable of generating ASTs, emphasizing the maintainability  the mechanisms they provide for tree traversal.
-% we examine the cost of maintaining the AST with the tool
-% we examine any walking tools that might help users traverse the tree
-% we
+Since the emergence of the first compiled, high level languages, ASTs and tree traversal patterns have garnered both an extensive amount of study, and a large (still growing) body of research. While the concept of ASTs and their usage is well established, AST construction, reusability, and long term maintenance remain relevant topics in the software engineering community [cite?]. In this section we consider several existing parsing tools capable of generating ASTs, emphasizing the maintainability of using such tools, and any potential mechanisms they provide for tree traversal.
 
-The first tool that comes to mind is the popular GNU ``compiler compiler," Bison\footnote{Bison has replaced YACC (Yet Another Compiler Compiler)} \cite{levine:1992}. 
+The first tool that comes to mind is the popular GNU ``compiler compiler," Bison\footnote{Bison serves as the modern successor to the original tool, YACC (Yet Another Compiler Compiler)} \cite{levine:1992}. Provided with a formal grammar, this tool -- referred to commonly as a ``parser generator" -- produces the state machines capable of recognizing a sentence in a given language.
 
 The popular compiler compiler YACC is able to generate a parser which produces a syntax tree. It can generate a tree walker as well, but is limited by a number of factors. The tree walker is generated from a definition file that uses special YACC syntax. The definition file must be updated in tandem with each change to the grammar of the language, and the tree walker code must be regenerated. This puts a strain on maintainability, particularly for developers who might be working on the later stages of the compiler's pipeline such as population or semantic analysis. Small tweaks to the grammar can percolate through the pipeline and break existing code in these later stages. 
 
@@ -207,7 +204,7 @@ public class Analyzer
 \centering
 \includegraphics[scale=.60]{figures/fixed_visitor_organization.pdf}
 \caption{A high level look at the organization of the fixed visitor.}
-\label{fig:flawedvisitororganization}
+\label{fig:fixedvisitororganization}
 \end{figure}
 
 The \texttt{ResolveConceptualVisitor} now has fewer methods and the traversal logic is properly decoupled from the visitor logic.
@@ -217,7 +214,7 @@ The \texttt{ResolveConceptualVisitor} now has fewer methods and the traversal lo
 % -----------------------------------------------------------------------------------------------
 
 \section{A Dynamic Tree Walker}
-While the corrections demonstrated in \ref{fig:visit} could be made, we decided to pursue a third, even more robust implementation that would exist independently of--and work simultaneously with--existing code. We created an entirely new class simply named TreeWalker. This new traversal component is completely decoupled from the data structure and dynamically analyzes the structure at runtime using Java reflection.
+While the corrections demonstrated in \ref{fig:fixedvisitororganization} could be made, we decided to pursue a third, even more robust implementation that would exist independently of--and work simultaneously with--existing code. We created an entirely new class simply named TreeWalker. This new traversal component is completely decoupled from the data structure and dynamically analyzes the structure at runtime using Java reflection.
 
 Instead of reusing the existing ResolveConceptualVisitor class, we created a new abstract visitor class for the dynamic tree walker--TreeWalkerVisitor. This decision allows the legacy code to continue to work alongside the new dynamic traversal component. One tradeoff is that future visitors have to be entirely rewritten (or at least heavily refactored), but the concern is mitigated, as old components can continue to work until the new components are ready to be dropped in place.
 
