@@ -1,0 +1,7 @@
+# LaTeX2e metadata
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.gz
