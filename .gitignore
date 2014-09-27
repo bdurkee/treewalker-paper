@@ -1,8 +1,8 @@
 # LaTeX2e metadata
+.DS_Store
 *.aux
 *.bbl
 *.blg
 *.log
 *.out
 *.gz
-.DS_STORE
