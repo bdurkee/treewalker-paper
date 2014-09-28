@@ -5,5 +5,8 @@
 *.blg
 *.log
 *.out
+*.synctex
+*.bak
 *.gz
 *.gz(busy)
+
