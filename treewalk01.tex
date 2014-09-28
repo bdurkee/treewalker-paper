@@ -15,7 +15,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 \title{Software Evolution and the Visitor Pattern: Motivation for a Dynamic Tree Walker}
 
 \author{Blair Durkee\corrauth, Daniel T. Welch, Murali Sitaraman}
-\address{School of Computing, Clemson University, South Carolina, SC, 
+\address{School of Computing, Clemson University, South Carolina, SC,
  29634, USA}
 
 \corraddr{Blair Durkee, School of Computing, Clemson University, Clemson SC, 29631, USA.}
@@ -25,7 +25,7 @@ T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 % -----------------------------------------------------------------------------------------------
 
 \begin{abstract}
-This paper describes our experiences re-engineering legacy software leading up to, and resulting in the creation of a reusable, reflection-based (dynamic) tree traversal mechanism. The mechanism we describe has come to play a central role in an ongoing software engineering project that that has slowly evolved from a relatively simple language translator, to a sophisticated verifying compiler over a period of nearly fifteen years. The source language we discuss is RESOLVE (Reusable Software Language with Verification): A `research language' designed for formal specification and verification of object-oriented programs. Being at its core a research language,  frequent and continual language-level evolution posed major maintainability challenges to the compiler. Everything from major to minor syntax changes (or additions) would often necessitate compiler wide refactors, spanning the abstract syntax representation, to the logic dictating abstract syntax traversal and all associated subcomponents. Given the development bottleneck posed by this propagation, we decided to build a novel, reflection based, generic walker that utilizes a relatively common pre-post variation of the visitor pattern. We describe this walker, some improvements to its initial design, and conclude with an application, illustrating its important role in code generation for RESOLVE's multiple target languages (C and Java). 
+This paper describes our experiences re-engineering legacy software leading up to, and resulting in the creation of a reusable, reflection-based (dynamic) tree traversal mechanism. The mechanism we describe has come to play a central role in an ongoing software engineering project that that has slowly evolved from a relatively simple language translator, to a sophisticated verifying compiler over a period of nearly fifteen years. The source language we discuss is RESOLVE (Reusable Software Language with Verification): A `research language' designed for formal specification and verification of object-oriented programs. Being at its core a research language,  frequent and continual language-level evolution posed major maintainability challenges to the compiler. Everything from major to minor syntax changes (or additions) would often necessitate compiler wide refactors, spanning the abstract syntax representation, to the logic dictating abstract syntax traversal and all associated subcomponents. Given the development bottleneck posed by this propagation, we decided to build a novel, reflection based, generic walker that utilizes a relatively common pre-post variation of the visitor pattern. We describe this walker, some improvements to its initial design, and conclude with an application, illustrating its important role in code generation for RESOLVE's multiple target languages (C and Java).
 
 \end{abstract}
 \keywords{visitor; design pattern; compiler; language translation}
@@ -39,11 +39,12 @@ This paper describes our experiences re-engineering legacy software leading up t
 
 \section{Introduction}
 \vspace{-2pt}
-Reusability and maintainability are key nonfunctional characteristics of well-engineered software. As far as long-running academia based research software projects are concerned, these qualities become especially important, but unfortunately, are too often overlooked in favor of rapid fire development -- usually culminating with that long sought-after paper or dissertation. Here we describe our solution to overcoming our system's (the RESOLVE compiler's) highly entrenched, non-reusable, and overall difficult-to-maintain preexisting tree walking strategy -- a solution which does not compromise rate of development. To understand the context in which this component was designed, and the full implications of its usage, we start with a brief overview of the compiler and its source language.
+Reusability and maintainability are key nonfunctional characteristics of well-engineered software. Where long-running academic research software projects are concerned, these qualities become especially important, but unfortunately, are too often overlooked in favor of rapid fire development -- usually culminating with that long sought-after paper or dissertation. This was the very situation in which we found ourselves, with respect to our research compiler and its legacy software components.
 
-RESOLVE is an integrated programming and specification language that seeks to realize the grand challenge of software verification. By writing reusable components that are formally specified, the compiler uses these specifications to produce a number of verification conditions (VCs) for any code programmers might write. These VCs are then sent off to an integrated prover which then attempts to automatically establish each VC generated -- thus proving the program correct\footnote{\textit{All} VCs must be established to ensure program correctness.}. While this process cannot guarantee software that is specified correctly, it rules out implementation errors by proving programs correct with respect to a given specification.
+Our compiler and its associated tools have been developed over the course of many years and successive generations of students. These tools have evolved and changed significantly, yet many early design decisions still persist. One example is the mechanism used to traverse the abstract syntax tree (AST) that represents parsed code. As with any compiler, this logic is a key component used in multiple stages of compilation such as pre-processing, population, analyzing, semantic checking, translation, etc. The initial implementation of AST traversal worked sufficiently well, but it turned out to be an impediment to the continued evolution of the compiler, thus serving as the motivation for the innovative reengineering solution desribed in this paper. We sought out a solution to overcoming our system's highly entrenched, non-reusable, and overall difficult-to-maintain preexisting tree walking strategy -- a solution that meets the standards of reusability and maintainability but does not compromise rate of development.
 
-The compiler, verification, and proof tools have been researched and developed over the course of many years, and successive generations of students. These tools have evolved and changed significantly, though many early design decisions still persist. One example is the mechanism used to traverse the abstract syntax tree (AST) that represents parsed RESOLVE code. As with any compiler, this logic is a key component used in multiple stages of compilation such as pre-processing, population, analyzing, semantic checking, translation, etc. The initial implementation of AST traversal worked sufficiently well, but turned out to be an impediment to the continued evolution of the compiler -- serving as motivation for the development of a dynamic tree walker to replace this older mechanism.
+To give some background and context about this component, we will briefly describe the compiler in which it exists -- the RESOLVE compiler. RESOLVE is an integrated programming and specification language that seeks to realize the grand challenge of software verification. By writing reusable components that are formally specified, the compiler uses these specifications to produce a number of verification conditions (VCs) for any code programmers might write. These VCs are then sent to an integrated prover which attempts to automatically establish the validity of each VC generated, thus proving the program correct\footnote{\textit{All} VCs must be established to ensure program correctness.}. While this process cannot guarantee software that is specified correctly, it rules out implementation errors by proving programs correct with respect to a given specification.
+
 
 \vspace{-6pt}
 
@@ -58,7 +59,7 @@ Since the emergence of the first compiled, high level languages, ASTs and tree t
 
 The first tool that comes to mind is the popular GNU ``compiler compiler," Bison\footnote{Bison serves as the modern successor to the original tool, YACC (Yet Another Compiler Compiler)} \cite{levine:1992}. Provided with a formal grammar, this tool -- referred to commonly as a ``parser generator" -- produces the state machines capable of recognizing a sentence in a given language.
 
-The popular compiler compiler YACC is able to generate a parser which produces a syntax tree. It can generate a tree walker as well, but is limited by a number of factors. The tree walker is generated from a definition file that uses special YACC syntax. The definition file must be updated in tandem with each change to the grammar of the language, and the tree walker code must be regenerated. This puts a strain on maintainability, particularly for developers who might be working on the later stages of the compiler's pipeline such as population or semantic analysis. Small tweaks to the grammar can percolate through the pipeline and break existing code in these later stages. 
+The popular compiler compiler YACC is able to generate a parser which produces a syntax tree. It can generate a tree walker as well, but is limited by a number of factors. The tree walker is generated from a definition file that uses special YACC syntax. The definition file must be updated in tandem with each change to the grammar of the language, and the tree walker code must be regenerated. This puts a strain on maintainability, particularly for developers who might be working on the later stages of the compiler's pipeline such as population or semantic analysis. Small tweaks to the grammar can percolate through the pipeline and break existing code in these later stages.
 
 One example of innovation on the basic model set by YACC is demonstrated by the compiler compiler SableCC [2]. SableCC provides the tools necessary to convert a BNF grammar into Java packages for lexing, parsing, and tree analysis. In addition, it creates a Java class for each node in the AST. The analysis package defines an abstract class which allows for efficient and foolproof implementation of tree traversal logic. The process of parsing the code and walking the tree is all done by generated code, and the developer needs only to implement specific visitor methods to create the analysis and code generation portions of the compiler.
 
@@ -69,11 +70,11 @@ ANTLR (Another Tool for Language Recognition) is another common parsing tool use
 % -----------------------------------------------------------------------------------------------
 
 \section{Initial Implementation and Motivation}
-The pipeline for compiling high-level code begins with lexing, parsing, and building an AST. This data structure is a logical representation of the source code, and it will be used in nearly every subsequent stage of the compilation pipeline. The need to traverse the tree in each stage presents a potential problem of code duplication. the traversal method will not change, but separating it from the logic of the populator, analyzer, and other components is a non-trivial task. This task, however, was simplified by a widely accepted design pattern from the gang of four \cite{gamma:1995}. This ``visitor" pattern was used, albeit imperfectly, in the initial development of the RESOLVE compiler.
+The pipeline for compiling high-level code begins with lexing, parsing, and building an abstract syntax tree. This data structure is a logical representation of the source code, and it will be used in nearly every subsequent stage of the compilation pipeline. The need to traverse the tree in each stage presents a problem of code reuse. The traversal mechanism will be remain the same during each use, but it must invoke different node visitation logic in each compilation stage (e.g., populator, analyzer, code generator). In order to avoid code duplication the traversal must be decoupled from the visitation logic, which is a non-trivial task. This task, however, was simplified by a widely accepted design pattern found in the Gang of Four's seminal work \textit{Design Patterns} \cite{gamma:1995}. This ``visitor pattern" was used in the initial development of the RESOLVE compiler, but it was used imperfectly.
 
-The design of the tree traversal component's first iteration bears close resemblance to the visitor pattern: Each class representing a type of node in the syntax tree contains a \texttt{accept} method which can dispatch the appropriate logic through polymorphism. However, the algorithm for traversal was not properly separated from the data structure as the visitor pattern requires.
+The design of the tree traversal component's first iteration bears close resemblance to the visitor pattern: Each class representing a type of node in the syntax tree contains an \texttt{accept} method which can dispatch the appropriate logic through subtype polymorphism. However, the algorithm for traversal was not properly separated from the data structure as the visitor pattern requires.
 
-The purpose of the visitor pattern is to decouple a data structure from the logic operating on it. While manifestations of this pattern may vary, they must necessarily adhere to that specific design principle of separation. During the initial development of the RESOLVE compiler, a few shortcuts were made to solve surface issues with the visitor implementation. \ref{fig:flawedvisitorexample} illustrates a snipped of the resulting code.
+The very purpose of the visitor pattern is to decouple a data structure from the logic operating on it. While manifestations of this pattern may vary, they must necessarily adhere to that specific design principle of separation. During the initial development of the RESOLVE compiler, a few shortcuts were made to address superficial issues with the visitor implementation. \ref{fig:flawedvisitorexample} illustrates a snippet of the resulting code.
 
 \begin{figure}
 \centering
@@ -85,7 +86,7 @@ public abstract
     		ProcedureDecl e) {}
 }
 
-public abstract 
+public abstract
 	class ResolveConceptualElement {
     abstract void accept(
         ResolveConceptualVisitor e);
@@ -94,7 +95,7 @@ public abstract
 public class ProcedureDecl
 	extends ResolveConceptualElement {	
     List<Stmt> myStatements;
-    
+
     public void accept(
     		ResolveConceptualVisitor e) {
         v.visitProcedureDecl(this);
@@ -113,14 +114,14 @@ public class Analyzer
         visitStmtList(e.getStatements();
 	table.endProcedureScope();
     }
-    
+
     private void visitStmtList(
     		List<Stmt> e) {
         for (Stmt s : e.getStatements()) {
             visitStmt(s);
         }
     }
-    
+
     public void visitStmt(Stmt e) {
         e.accept(this);
     }
@@ -131,7 +132,7 @@ public class Analyzer
 \label{fig:flawedvisitorexample}
 \end{figure}
 
-The traversal logic, according to visitor pattern, should be contained within the \texttt{accept} visitor method. In this initial implementation, it has been moved to the visit method contained in the \texttt{ResolveConceptualVisitor} component. Consequently, every \texttt{ResolveConceptualVisitor} will bear the responsibility of traversing the syntax tree. Thus, most changes in the trees structure, no matter how minor, necessitates large, cross component refactors.
+The traversal logic, according to visitor pattern, should be contained within the \texttt{accept} visitor method. In this initial implementation, it has been moved to the \texttt{visit} method contained in the \texttt{ResolveConceptualVisitor} component. Consequently, every \texttt{ResolveConceptualVisitor} will bear the responsibility of traversing the syntax tree. The structure of the data is coupled with the visitation logic in direct opposition to the fundamental principles of the visitor pattern. Thus any change in the tree structure -- no matter how minor -- will necessitate large, cross-component refactors.
 
 \begin{figure}[!htb]
 \centering
@@ -140,7 +141,7 @@ The traversal logic, according to visitor pattern, should be contained within th
 \label{fig:flawedvisitororganization}
 \end{figure}
 
-The reason for the appearance of this critical flaw is unknown, but it seems likely to be related to the singular visit method rather than pre-post traversal visits. Consider the same code with that minor change, shown in \ref{fig:fixedvisitorexample}
+The reason for the appearance of this critical flaw is not certain to us who inherited this legacy code, but it seems likely to be related to having a singular visit method rather than pre and post visits. Having only one visit method per tree node restricts the traversal to only a pre-ordering or a post-ordering. \ref{fig:flawedvisitorexample} demonstrates a common scenario for AST traversal--the opening and closing of new scopes in the symbol table--which requires both orderings. The scope is opened as we traverse down the tree and closed as we traverse back up, but of course, this is not possible if we visit the node only once. The legacy code ``solves" this problem by placing the traversal logic inside the visitor methods and, in the process, defeats the very purpose of the visitor pattern. It is possible to reclaim a proper visitor pattern implementation by adding preorder and postorder visits. Consider the code with that minor change, shown in \ref{fig:fixedvisitorexample}
 
 \begin{figure}[!htb]
 \centering
@@ -152,7 +153,7 @@ public abstract
     postProcedureDecl(ProcedureDecl e) {}
 }
 
-public abstract 
+public abstract
 	class ResolveConceptualElement {
     abstract void accept(
         ResolveConceptualVisitor e);
@@ -161,7 +162,7 @@ public abstract
 public class ProcedureDecl
 	extends ResolveConceptualElement {	
     List<Stmt> myStatements;
-    
+
     public void accept(
     	  ResolveConceptualVisitor e) {
         v.preProcedureDecl(this);
@@ -188,11 +189,11 @@ public class Analyzer
   			ProcedureDecl e) {
         table.beginProcedureScope();
     }
-    
+
     public void postProcedureDecl(
     			ProcedureDecl e) {
         table.endProcedureScope();
-    }        
+    }
 }
 \end{lstlisting}
 \end{minipage}
@@ -207,18 +208,18 @@ public class Analyzer
 \label{fig:fixedvisitororganization}
 \end{figure}
 
-The \texttt{ResolveConceptualVisitor} now has fewer methods and the traversal logic is properly decoupled from the visitor logic.
+The \texttt{ResolveConceptualVisitor} now has fewer methods and the traversal logic is properly decoupled from the visitation logic.
 
 % -----------------------------------------------------------------------------------------------
 %	Contribution
 % -----------------------------------------------------------------------------------------------
 
 \section{A Dynamic Tree Walker}
-While the corrections demonstrated in \ref{fig:fixedvisitororganization} could be made, we decided to pursue a third, even more robust implementation that would exist independently of--and work simultaneously with--existing code. We created an entirely new class simply named TreeWalker. This new traversal component is completely decoupled from the data structure and dynamically analyzes the structure at runtime using Java reflection.
+While the corrections demonstrated in \ref{fig:fixedvisitororganization} could be made, we needed a solution that would not require refactoring of our legacy code. Our existing components needed to continue to work in their present form while we developed new versions of these components. Additionally we believed we could develop a solution that would consume much less time, both initially and in the long-term, than a significant refactoring would. Therefore we decided to pursue a third, even more robust implementation that would exist independently of--and work simultaneously with--legacy code.
 
-Instead of reusing the existing ResolveConceptualVisitor class, we created a new abstract visitor class for the dynamic tree walker--TreeWalkerVisitor. This decision allows the legacy code to continue to work alongside the new dynamic traversal component. One tradeoff is that future visitors have to be entirely rewritten (or at least heavily refactored), but the concern is mitigated, as old components can continue to work until the new components are ready to be dropped in place.
+The solution involves the creation of two new classes: \texttt{TreeWalker} and \texttt{TreeWalkerVisitor}. \texttt{TreeWalker} is the new traversal mechanism which is completely decoupled from both the tree structure and the visitation logic. It dynamically analyzes the tree composition at runtime using Java reflection. This \texttt{TreeWalkerVisitor} replaces the old \texttt{ResolveConceptualVisitor} class and provides a new abstract visitor class to implement visitor logic for the various components in the compiler. This design does not modify any existing code and still utilizes the \texttt{ResolveConceptualElement} AST classes. This allows the legacy code to continue to work alongside the new dynamic traversal component. In other words, old components can continue to work until new components are ready to be dropped in place.
 
-With two new components in place, the Tree Walker can then call the visitor methods as it traverses the tree. \ref{fig:newvisit} is a simplified version of the traversal algorithm.
+With this new design, \texttt{TreeWalker} will dynamically analyze the structure of the tree at runtime and invoke the appropriate visitor methods as it traverses the tree. \ref{fig:newvisit} is a highly simplified version of the traversal algorithm code (see Appendix for complete code).
 
 \begin{figure}[!htb]
 \centering
@@ -226,7 +227,7 @@ With two new components in place, the Tree Walker can then call the visitor meth
 \begin{lstlisting}[language=java]
 public void visit(ResolveConceptualElement e) {
     invokeVisitorMethods("pre", e);
-    
+
     for (ResolveConceptualElement node : e.getChildren()) {
         visit(node);
     }
@@ -238,7 +239,7 @@ public void visit(ResolveConceptualElement e) {
 \label{fig:newvisit}
 \end{figure}
 
-The \texttt{visit} method is a simple recursive, depth-first traversal of the AST. At each level, the procedure will make ``pre" call before visiting children, and a ``post" call after. These calls are made via \texttt{invokeVisitorMethods} -- a local method used to construct the appropriate visitor name and dispatch the correct call using reflection techniques.
+The \texttt{visit} method is a simple recursive, depth-first traversal of the AST. At each level, the procedure will make ``pre" call before visiting children and a ``post" call after. These calls are made via \texttt{invokeVisitorMethods} -- a local method used to construct the appropriate visitor method name and dispatch the correct calls using reflection techniques (the details are not relevant to the overall design, but see appendix for this method's code). These calls include pre and post methods for each class (base and derived classes) represented by the AST node object.
 
 \begin{figure}[!htb]
 \centering
@@ -246,29 +247,23 @@ The \texttt{visit} method is a simple recursive, depth-first traversal of the AS
 \caption{A revised \texttt{visit} method.}
 \end{figure}
 
-The logic for retrieving a node's children is contained in the \texttt{getChildren} defined in the root RESOLVEs AST hierarchy, the \texttt{ResolveConceptualElement} class. This design choice allows for more control over the method of traversal. The default method uses Java reflection to obtain a list of the children for a given node, and the children are returned in a list of unspecified order. If the order is important (or needs to be different from the default), then inheriting classes can override the method with hard-coded logic for returning the children. Figure 4 shows a simplified version of this method.
+The logic for retrieving a node's children is contained in the \texttt{getChildren} defined in the root AST class hierarchy, using the base \texttt{ResolveConceptualElement} class. This design choice allows for more control over the order of traversal. The default base method uses Java reflection to obtain a list of the children for a given node and returns the children in a list of unspecified order. Figure 4 shows a simplified version of this dynamic \texttt{getChildren} method (see Appendix for complete code). If the order is important (or needs to be different from the default), then derived classes can override the method with static logic for returning the children.
 
 \begin{figure}[!htb]
 \centering
 \begin{minipage}{.80\textwidth}
 \begin{lstlisting}[language=java]
-public List<ResolveConceptualElement getChildren() {
+public List<ResolveConceptualElement> getChildren() {
     List<ResolveConceptualElement> children = new LinkedList<>();
-    ArrayList<Field> fields = new ArrayList<>();
+    ArrayList<Field> fields = this.getDeclaredFields();
     
-    //Populate "fields" with the declared fields of the object's defining class
-    
-    Iterator<Field> iterFields = fields.iterator();
-    while(iterFields.hasNext()) {
-        Field curField = iterFields.next();
-        
-        Class<?> fieldType = curField.getType();
-        if (ResolveConceptualElement.class
-                  .isAssignableFrom(fieldType)) {
-            children.add(ResolveConceptualElement
-                .class.cast(curField.get(this)));
+    for (Field field : fields) {
+        if (ResolveConceptualElement.class.isAssignableFrom(field.getType())) {
+            children.add(ResolveConceptualElement.class.cast(field.get(this)));
         }
     }
+    
+    return children;
 }
 \end{lstlisting}
 \end{minipage}
@@ -277,16 +272,30 @@ public List<ResolveConceptualElement getChildren() {
 \end{figure}
 
 
-The visitors we use include a number of typical compiler components and are indicated in \ref{fig:getchildren}. Each visitor can override as many or as few visit methods as needed, making the creation of a new visitor quite simple. this has many advantages for maintainability as well. Unlike the original implementation of the visitor pattern, the tree walker allows new methods to be added to a visitor without the need to consider existing code. All the traversal logic is contained within the tree walker class. 
+Use of the dynamic tree walker is simple and straightforward. To traverse an AST and apply appropriate visitation logic, first create an instance of the \texttt{TreeWalker} class, passing an instance of a \texttt{TreeWalkerVisitor} (such as the populator or code generator) as a parameter to the constructor. Then, simply call \texttt{visit} on the root of the abstract syntax tree.
+
+% -----------------------------------------------------------------------------------------------
+%	Results and Benefits
+% -----------------------------------------------------------------------------------------------
+
+\section{Results and Benefits}
+
+The dynamic tree walker is a unique and innovative reengineering approach that has yielded a number of benefits for our ongoing research project. The initial benefit was its rapid implementation. The original version of the dynamic tree walker, while admittedly less complex than the iteration seen in the appendix, was implemented by a single developer in the span of a few hours. This allowed us to begin work on new versions of our compiler components with very little delay and with no interruption to its existing operation. In fact, it allowed for simultaneous operation of both new and old components--each sharing the same AST class hierarchy but using their distinct tree traversal mechanisms.
+
+Another major benefit of the dynamic tree walker is that it adds an entirely new layer of abstraction to the visitor pattern. The visitor pattern already mandates the decoupling of the traversal logic from the visitation logic, but our design also separates the traversal logic from the structure of the tree itself. Because the structure of the tree is extracted from the code dynamically at runtime, changes can be made to the AST classes and the tree walker will seamlessly adjust. The visitors, on the other hand, may need to be adjusted in cases where an existing part of the tree was renamed or removed--though perhaps not when adding to the tree. This is due to the fact that visitation logic is, by necessity, coupled with the tree structure.
+
+In many compiler compilers, the relationship between the traversal algorithm and the tree structure is established in a pre-runtime code generation phase. This is usually accomplished by auto-generating AST classes with hard-coded traversal logic extracted from a grammar or other definition file. Our reengineering approach, however, does not require us to rewrite our legacy AST classes (or any part of them). Furthermore, it largely avoids the code generation step. It may be desirable to generate the abstract \texttt{TreeWalkerVisitor} class ahead of runtime to simplify the creation of new components by providing method declarations to override (indeed, we have opted for this approach). However, because methods are invoked using dynamically-constructed method names, this is not strictly necessary.
+
+Finally, the dynamic tree walker is has reusable and maintainable. As has been clearly demonstrated, there is very little coupling in our design. This allows the tree walker to be effortlessly reused for any number of components in our compiler. The maintainability is also enhanced by the fact that the traversal logic is contained within a single class rather than distributed over the set of all AST classes. We have already leveraged this benefit by easily making additions and changes to the traversal such as inserting virtual nodes on-the-fly. Overall, the dynamic tree walker has saved a large amount of development time by eliminating the need to rewrite legacy code while also providing a rapidly implementable mechanism for continued iteration and evolution of the software.
 
 % -----------------------------------------------------------------------------------------------
 %	Application
 % -----------------------------------------------------------------------------------------------
 
-\section{Application: Code Generation}
+\section{Application Example: Code Generation}
 \vspace{-2pt}
 
-One application of the walking mechanism that has been described at length in this paper is its key role in RESOLVE's code generation phase. Since development began on the compiler, code generation -- like the many other phases of compilation -- was hindered not only by initial design of the AST visitor, but also by the (unusually) steep set of constraints RESOLVE code generation is subject to, including the following.
+One application of the walking mechanism that has been mentioned in this paper is the code generation phase. Since development began on the RESOLVE compiler, code generation -- like the many other phases of compilation -- was hindered not only by initial design of the AST visitor, but also by the (unusually) steep set of constraints RESOLVE code generation is subject to, including the following.
 
 \begin{enumerate}
 \item \textit{Correct by construction}: Provided with successfully verified RESOLVE source-code, it falls upon the translator to model, as faithfully as possible, each construct of the source language \textit{within} the target language. This modeling process -- which strives to maintain the established correctness of the original source -- typically precludes the possibility of any sort of syntax-directed translation -- as any code generated fitting such a model inevitably ends up looking wildly different from the original source.
@@ -299,7 +308,7 @@ With these requirements in place, development of a RESOLVE translator hinges on 
 To illustrate the general process of producing runnable C from RESOLVE, consider the following simple operation:
 
 \begin{verbatim}
-Operation Int_Do_Nothing(); 
+Operation Int_Do_Nothing();
 Procedure
         Var X : Integer;
         X := 3;
