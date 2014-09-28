@@ -34,7 +34,7 @@ This paper describes our experiences re-engineering legacy software leading up t
 \vspace{-6pt}
 
 % -----------------------------------------------------------------------------------------------
-%	Intro
+%	Introduction
 % -----------------------------------------------------------------------------------------------
 
 \section{Introduction}
@@ -43,8 +43,7 @@ Reusability and maintainability are key nonfunctional characteristics of well-en
 
 Our compiler and its associated tools have been developed over the course of many years and successive generations of students. These tools have evolved and changed significantly, yet many early design decisions still persist. One example is the mechanism used to traverse the abstract syntax tree (AST) that represents parsed code. As with any compiler, this logic is a key component used in multiple stages of compilation such as pre-processing, population, analyzing, semantic checking, translation, etc. The initial implementation of AST traversal worked sufficiently well, but it turned out to be an impediment to the continued evolution of the compiler, thus serving as the motivation for the innovative reengineering solution desribed in this paper. We sought out a solution to overcoming our system's highly entrenched, non-reusable, and overall difficult-to-maintain preexisting tree walking strategy -- a solution that meets the standards of reusability and maintainability but does not compromise rate of development.
 
-To give some background and context about this component, we will briefly describe the compiler in which it exists -- the RESOLVE compiler. RESOLVE is an integrated programming and specification language that seeks to realize the grand challenge of software verification. By writing reusable components that are formally specified, the compiler uses these specifications to produce a number of verification conditions (VCs) for any code programmers might write. These VCs are then sent to an integrated prover which attempts to automatically establish the validity of each VC generated, thus proving the program correct\footnote{\textit{All} VCs must be established to ensure program correctness.}. While this process cannot guarantee software that is specified correctly, it rules out implementation errors by proving programs correct with respect to a given specification.
-
+To give some background and context about this component, we will briefly describe the compiler in which it exists -- the RESOLVE compiler. RESOLVE is an integrated programming and specification language that seeks to realize the grand challenge of software verification. By writing reusable components that are formally specified, the compiler uses these specifications to produce a number of verification conditions (VCs) for any code programmers might write. These VCs are then sent to an integrated prover which attempts to automatically establish the validity of each VC generated, thus proving the program correct\footnote{\textit{All} VCs must be established to ensure program correctness.}. While this process cannot guarantee software that is specified correctly, it rules out implementation errors by proving programs correct with respect to a given specification
 
 \vspace{-6pt}
 
