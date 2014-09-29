@@ -218,7 +218,7 @@ While the corrections demonstrated in \ref{fig:fixedvisitororganization} could b
 
 The solution involves the creation of two new classes: \texttt{TreeWalker} and \texttt{TreeWalkerVisitor}. \texttt{TreeWalker} is the new traversal mechanism which is completely decoupled from both the tree structure and the visitation logic. It dynamically analyzes the tree composition at runtime using Java reflection. This \texttt{TreeWalkerVisitor} replaces the old \texttt{ResolveConceptualVisitor} class and provides a new abstract visitor class to implement visitor logic for the various components in the compiler. This design does not modify any existing code and still utilizes the \texttt{ResolveConceptualElement} AST classes. This allows the legacy code to continue to work alongside the new dynamic traversal component. In other words, old components can continue to work until new components are ready to be dropped in place.
 
-With this new design, \texttt{TreeWalker} will dynamically analyze the structure of the tree at runtime and invoke the appropriate visitor methods as it traverses the tree. \ref{fig:newvisit} is a highly simplified version of the traversal algorithm code (see Appendix for complete code).
+With this new design, \texttt{TreeWalker} will dynamically analyze the structure of the tree at runtime and invoke the appropriate visitor methods as it traverses the tree. \ref{fig:newvisit} is a highly simplified version of the traversal algorithm code (see \ref{app:codelistings} for complete code).
 
 \begin{figure}[!htb]
 \centering
@@ -238,7 +238,7 @@ public void visit(ResolveConceptualElement e) {
 \label{fig:newvisit}
 \end{figure}
 
-The \texttt{visit} method is a simple recursive, depth-first traversal of the AST. At each level, the procedure will make ``pre" call before visiting children and a ``post" call after. These calls are made via \texttt{invokeVisitorMethods} -- a local method used to construct the appropriate visitor method name and dispatch the correct calls using reflection techniques (the details are not relevant to the overall design, but see appendix for this method's code). These calls include pre and post methods for each class (base and derived classes) represented by the AST node object.
+The \texttt{visit} method is a simple recursive, depth-first traversal of the AST. At each level, the procedure will make ``pre" call before visiting children and a ``post" call after. These calls are made via \texttt{invokeVisitorMethods} -- a local method used to construct the appropriate visitor method name and dispatch the correct calls using reflection techniques (the details are not relevant to the overall design, but see \ref{app:codelistings} for this method's code). These calls include pre and post methods for each class (base and derived classes) represented by the AST node object.
 
 \begin{figure}[!htb]
 \centering
@@ -246,7 +246,7 @@ The \texttt{visit} method is a simple recursive, depth-first traversal of the AS
 \caption{A revised \texttt{visit} method.}
 \end{figure}
 
-The logic for retrieving a node's children is contained in the \texttt{getChildren} defined in the root AST class hierarchy, using the base \texttt{ResolveConceptualElement} class. This design choice allows for more control over the order of traversal. The default base method uses Java reflection to obtain a list of the children for a given node and returns the children in a list of unspecified order. Figure 4 shows a simplified version of this dynamic \texttt{getChildren} method (see Appendix for complete code). If the order is important (or needs to be different from the default), then derived classes can override the method with static logic for returning the children.
+The logic for retrieving a node's children is contained in the \texttt{getChildren} defined in the root AST class hierarchy, using the base \texttt{ResolveConceptualElement} class. This design choice allows for more control over the order of traversal. The default base method uses Java reflection to obtain a list of the children for a given node and returns the children in a list of unspecified order. Figure 4 shows a simplified version of this dynamic \texttt{getChildren} method (see \ref{app:codelistings} for complete code). If the order is important (or needs to be different from the default), then derived classes can override the method with static logic for returning the children.
 
 \begin{figure}[!htb]
 \centering
@@ -342,5 +342,313 @@ We feel the approach to tree walking in the paper lends itself well to this stra
 \section{Acknowledgements}
 
 \bibliography{treewalkreferences}
+
+% -----------------------------------------------------------------------------------------------
+%	Appendices
+% -----------------------------------------------------------------------------------------------
+
+\newpage
+\section{Appendix} \label{app:codelistings}
+\begin{lstlisting}[language=java,caption={TreeWalker.java}]
+public class TreeWalker {
+
+    private TreeWalkerVisitor myVisitor;
+
+    /**
+     * Constructs a new <code>TreeWalker</code> that applies the logic of
+     * <code>TreeWalkerVisitor</code> to a RESOLVE abstract syntax tree.
+     * @param twv	An instance of TreeWalkerVisitor which implements
+     * 				visitor methods to be applied to nodes of the AST.
+     */
+    public TreeWalker(TreeWalkerVisitor visitor) {
+        this.myVisitor = visitor;
+    }
+
+    /**
+     * Visits the node <code>e</code> by calling pre- visitor methods, recursively
+     * visiting child nodes, and calling post- visitor methods.
+     * If the <code>TreeWalkerVisitor</code> contains a method named
+     * <code>walk[className]</code>, that method is called instead of visiting the children.
+     * @param e	The RESOLVE abstract syntax tree node to visit/walk
+     */
+    public void visit(ResolveConceptualElement e) {
+        if (e != null) {
+            // are we overriding the walking for this element?
+            if (!walkOverride(e)) {
+                // invoke the "pre" visitor method(s)
+                invokeVisitorMethods("pre", e);
+
+                java.util.List<ResolveConceptualElement> children =
+                        e.getChildren();
+
+                if (children.size() > 0) {
+                    Iterator<ResolveConceptualElement> iter =
+                            children.iterator();
+
+                    ResolveConceptualElement prevChild = null, nextChild = null;
+                    while (iter.hasNext()) {
+                        prevChild = nextChild;
+                        nextChild = iter.next();
+                        invokeVisitorMethods("mid", e, prevChild, nextChild);
+                        visit(nextChild);
+                    }
+                    invokeVisitorMethods("mid", e, nextChild, null);
+                }
+                // invoke the "post" visitor method(s)
+                invokeVisitorMethods("post", e);
+            }
+        }
+    }
+
+    private void invokeVisitorMethods(String prefix,
+            ResolveConceptualElement... e) {
+        boolean pre = prefix.equals("pre"), post = prefix.equals("post"), mid =
+                prefix.equals("mid"), list = (e[0] instanceof VirtualListNode);
+
+        // Invoke generic visitor methods (preAny, postAny)
+        if (pre) {
+            myVisitor.preAny(e[0]);
+        }
+
+        // Get the heirarchy of classes from which this node inherits
+        // e.g., [ConceptModuleDec, ModuleDec, Dec, ResolveConceptualElement]
+        Class<?> elementClass = e[0].getClass();
+        ArrayList<Class<?>> classHierarchy = new ArrayList<Class<?>>();
+
+        if (list) {
+            classHierarchy.add(((VirtualListNode) e[0]).getParent().getClass());
+        }
+        else if (pre || post) {
+            while (elementClass != ResolveConceptualElement.class) {
+                if (post) {
+                    classHierarchy.add(elementClass);
+                }
+                else {
+                    classHierarchy.add(0, elementClass);
+                }
+                elementClass = elementClass.getSuperclass();
+            }
+        }
+        else {
+            classHierarchy.add(elementClass);
+        }
+
+        // Iterate over the class hierarchy
+        Iterator<Class<?>> iter = classHierarchy.iterator();
+        while (iter.hasNext()) {
+            Class<?> currentClass = iter.next();
+
+            // Construct name of method
+            String className, methodName;
+            if (!list) {
+                className = currentClass.getSimpleName();
+            }
+            else {
+                className = ((VirtualListNode) e[0]).getNodeName();
+            }
+            methodName = prefix + className;
+
+            ResolveConceptualElement[] parent = Arrays.copyOf(e, e.length);
+            // Get parent and child types if this is a list node
+            Class<?> paramType = ResolveConceptualElement.class;
+            if (list) {
+                paramType = ((VirtualListNode) e[0]).getListType();
+                parent[0] = ((VirtualListNode) e[0]).getParent();
+            }
+
+            // Now try to obtain the proper visitor method
+            try {
+                Method visitorMethod;
+                if (pre || post) { // pre and post methods
+                    visitorMethod =
+                            this.myVisitor.getClass().getMethod(methodName,
+                                    currentClass);
+                }
+                else { // mid methods
+                    visitorMethod =
+                            this.myVisitor.getClass().getMethod(methodName,
+                                    currentClass, paramType, paramType);
+                }
+
+                // Invoking the visitor method now!
+                visitorMethod.invoke(this.myVisitor, (Object[]) parent);
+            }
+            catch (NoSuchMethodException nsme) {
+                //This is fine if we're dealing with a virtual node,
+                //otherwise it shouldn't be possible
+                if (!list) {
+                    throw new RuntimeException(nsme);
+                }
+            }
+            catch (IllegalAccessException iae) {
+                throw new RuntimeException(iae);
+            }
+            catch (InvocationTargetException ite) {
+                Throwable iteCause = ite.getCause();
+
+                if (iteCause instanceof RuntimeException) {
+                    throw (RuntimeException) iteCause;
+                }
+
+                throw new RuntimeException(iteCause);
+            }
+        }
+
+        if (post) {
+            myVisitor.postAny(e[0]);
+        }
+    }
+
+    private boolean walkOverride(ResolveConceptualElement e) {
+        Class<?> elementClass = e.getClass();
+        ArrayList<Class<?>> classHierarchy = new ArrayList<Class<?>>();
+        while (elementClass != ResolveConceptualElement.class) {
+            classHierarchy.add(0, elementClass);
+            elementClass = elementClass.getSuperclass();
+        }
+
+        boolean foundOverride = false;
+        Iterator<Class<?>> iter = classHierarchy.iterator();
+        while (iter.hasNext() && !foundOverride) {
+            Class<?> c = iter.next();
+
+            if (!c.equals(VirtualListNode.class)) {
+                String walkMethodName = "walk" + c.getSimpleName();
+                try {
+                    Method walkMethod =
+                            this.myVisitor.getClass().getMethod(walkMethodName,
+                                    c);
+                    foundOverride =
+                            ((Boolean) walkMethod.invoke(this.myVisitor, e));
+                }
+                catch (NoSuchMethodException nsme) {
+                    //Shouldn't be possible
+                    throw new RuntimeException(nsme);
+                }
+                catch (IllegalAccessException iae) {
+                    //Shouldn't be possible
+                    throw new RuntimeException(iae);
+                }
+                catch (InvocationTargetException ite) {
+                    //An exception was thrown inside the corresponding walk method
+                    Throwable iteCause = ite.getCause();
+
+                    if (iteCause instanceof RuntimeException) {
+                        throw (RuntimeException) iteCause;
+                    }
+
+                    throw new RuntimeException(iteCause);
+                }
+            }
+        }
+        return foundOverride;
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=java,caption={TreeWalkerVisitor.java}]
+public abstract class TreeWalkerVisitor {
+    // AbstractFunctionExp
+    public boolean walkAbstractFunctionExp(AbstractFunctionExp data) {
+        return false;
+    }
+
+    public void preAbstractFunctionExp(AbstractFunctionExp data) {}
+
+    public void midAbstractFunctionExp(AbstractFunctionExp node,
+            ResolveConceptualElement previous, ResolveConceptualElement next) {}
+
+    public void postAbstractFunctionExp(AbstractFunctionExp data) {}
+    
+    // Continue for all types of AST nodes... 
+}
+
+\end{lstlisting}
+
+\begin{lstlisting}[language=java,caption={ResolveConceptualElement.java}]
+
+public abstract class ResolveConceptualElement {
+    public List<ResolveConceptualElement> getChildren() {
+
+        //We'd like to hit the fields in the order they appear in the class,
+        //starting with the most general class and getting more specific.  So,
+        //we build a stack of the class hierarchy of this instance
+        
+        Deque<Class<?>> hierarchy = new LinkedList<Class<?>>();
+        Class<?> curClass = this.getClass();
+        do {
+            hierarchy.push(curClass);
+            curClass = curClass.getSuperclass();
+        } while (curClass != ResolveConceptualElement.class);
+
+        List<ResolveConceptualElement> children = new List<ResolveConceptualElement>();
+        ArrayList<Field> fields = new ArrayList<Field>();
+        while (!hierarchy.isEmpty()) {
+
+            curClass = hierarchy.pop();
+
+            Field[] curFields = curClass.getDeclaredFields();
+            for (int i = 0; i < curFields.length; ++i) {
+                fields.add(curFields[i]);
+            }
+            curClass = curClass.getSuperclass();
+        }
+
+        // loop through all the class members
+        Iterator<Field> iterFields = fields.iterator();
+        while (iterFields.hasNext()) {
+            Field curField = iterFields.next();
+            if (!Modifier.isStatic(curField.getModifiers())) {
+                curField.setAccessible(true);
+                Class<?> fieldType = curField.getType();
+
+                try {
+                    // is this member a ResolveConceptualElement?
+                    // if so, add it as a child
+                    if (ResolveConceptualElement.class
+                            .isAssignableFrom(fieldType)) {
+                        //System.out.println("Walking: " + curField.getName());
+                        children.add(ResolveConceptualElement.class
+                                .cast(curField.get(this)));
+                    }
+                    // is this member a list of ResolveConceptualElements?
+                    // if so, add the elements to the list of children
+                    else if (java.util.List.class.isAssignableFrom(fieldType)) {
+                        Class<?> listOf =
+                                (Class<?>) ((ParameterizedType) curField
+                                        .getGenericType())
+                                        .getActualTypeArguments()[0];
+                        java.util.List<?> fieldList =
+                                java.util.List.class.cast(curField.get(this));
+                        if (fieldList != null
+                                && fieldList.size() > 0
+                                && ResolveConceptualElement.class
+                                        .isAssignableFrom(listOf)) {
+                            children
+                                    .add(new VirtualListNode(
+                                            this,
+                                            curField.getName(),
+                                            (java.util.List<ResolveConceptualElement>) fieldList,
+                                            (Class<?>) ((ParameterizedType) curField
+                                                    .getGenericType())
+                                                    .getActualTypeArguments()[0]));
+                        }
+                    }
+                }
+                catch (Exception ex) {
+                    if (ex instanceof RuntimeException) {
+                        throw (RuntimeException) ex;
+                    }
+                    else {
+                        throw new RuntimeException(ex);
+                    }
+                }
+            }
+        }
+
+        return children;
+    }
+}
+\end{lstlisting}
 
 \end{document}
