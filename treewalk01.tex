@@ -54,15 +54,23 @@ To give some background and context about this component, we will briefly descri
 \section{Related Work}
 \vspace{-2pt}
 
-Since the emergence of the first compiled, high level languages, ASTs and tree traversal patterns have garnered both an extensive amount of study, and a large (still growing) body of research. While the concept of ASTs and their usage is well established, AST construction, reusability, and long term maintenance remain relevant topics in the software engineering community [cite?]. In this section we consider several existing parsing tools capable of generating ASTs, emphasizing the maintainability of using such tools, and any potential mechanisms they provide for tree traversal.
+Since the emergence of the first compiled, high level languages, ASTs and tree traversal patterns have garnered both an extensive amount of study, and a large (still growing) body of literature. While the concept of ASTs and their usage is well established, AST construction, reusability, and long term maintenance remain relevant topics in the software engineering community \cite{tanumoy:2012}. In this section, we consider several existing parsing tools capable of generating ASTs -- emphasizing the maintainability cost of using such tools, and any relevant mechanisms they might provide for AST traversal.
 
-The first tool that comes to mind is the popular GNU ``compiler compiler," Bison\footnote{Bison serves as the modern successor to the original tool, YACC (Yet Another Compiler Compiler)} \cite{levine:1992}. Provided with a formal grammar, this tool -- referred to commonly as a ``parser generator" -- produces the state machines capable of recognizing a sentence in a given language.
+The first tool we consider is the popular GNU ``compiler compiler," Bison\footnote{Bison serves as a modern successor to the original tool, YACC (Yet Another Compiler Compiler) developed in the early 1970s.} \cite{levine:1992}. Provided with a formal grammar, this tool -- commonly referred to as a ``parser generator" -- produces a state machine capable of recognizing sentences in a given language. By annotating rules of the grammar with semantic actions, users are able to construct their own AST representation from the underlying concrete syntax tree. There are several disadvantages standing in the way to us using this as our primary tool. The first is that Bison does not provide any built in support for automatic AST node construction or tree traversal: Users must create their own nodes, and find a means of traversing their tree either via a visitor, or small recursive `evaluate' methods. The second disadvantage is that developers must learn a specific, specialized Bison syntax (separate from its BNF style grammar syntax) to specify semantic actions. A third disadvantage concerns modularity: The need to annotate grammar rules with specific semantic actions inherently couples a grammar more closely to a given application. This coupling not only decreases the reusability (and generality) of a grammar, but also makes it harder to maintain over time since every change to the rules of the grammar necessitates changes to certain actions as well.
 
-The popular compiler compiler YACC is able to generate a parser which produces a syntax tree. It can generate a tree walker as well, but is limited by a number of factors. The tree walker is generated from a definition file that uses special YACC syntax. The definition file must be updated in tandem with each change to the grammar of the language, and the tree walker code must be regenerated. This puts a strain on maintainability, particularly for developers who might be working on the later stages of the compiler's pipeline such as population or semantic analysis. Small tweaks to the grammar can percolate through the pipeline and break existing code in these later stages.
+Another tool building on the work of YACC/Bison is demonstrated by SableCC \cite{gagnon:1998}. SableCC provides the tools necessary to convert a BNF grammar into Java packages for lexing, parsing, and tree analysis. In addition, it creates a Java class for each node in the AST. The analysis package defines an abstract class which allows for efficient and foolproof implementation of tree traversal logic. The process of parsing the code and walking the tree is all done by generated code, and the developer needs only to implement specific visitor methods to create the analysis and code generation portions of the compiler.
 
-One example of innovation on the basic model set by YACC is demonstrated by the compiler compiler SableCC [2]. SableCC provides the tools necessary to convert a BNF grammar into Java packages for lexing, parsing, and tree analysis. In addition, it creates a Java class for each node in the AST. The analysis package defines an abstract class which allows for efficient and foolproof implementation of tree traversal logic. The process of parsing the code and walking the tree is all done by generated code, and the developer needs only to implement specific visitor methods to create the analysis and code generation portions of the compiler.
+The final representative tool we discuss is Antlr (Another Tool for Language Recognition) \cite{parr:2011}. Historically, Anltr has allowed its grammars to be annotated with so-called ``rewrite operators," enabling the parser to automatically generate an AST hierarchy, which users could then (manually) outfit with visitor support. However, with more recent iterations of the tool, automatic AST construction has been removed in favor concrete syntax trees (or, parse trees). Accompanying this radical change in emphasis towards concrete syntax is also the addition of a Sax-Dom style event processing mechanism -- manifesting itself in the form of automatically generated parse tree listeners and/or visitors\footnote{These features are present in all versions of the tool since Antlr v4}. 
 
-ANTLR (Another Tool for Language Recognition) is another common parsing tool used for tree generation and traversal. The compiler discussed in this paper is based on ANTLR v3, upgraded from previous versions. While ANTLR v4 offers a new approach incorporating sax-dom event style parse tree listeners, we needed a quicker turnaround time than re-writing the grammar and significant portions of the compiler would allow. While there have been many innovations int he field of compiler tree walking, this paper is more specifically about the use of Java reflection to quickly allow more flexibility in accessing an existing tree structure.
+In terms of the RESOLVE compiler, the implications of these additions are immense: Not only does the generic ``tree walker" we describe in this paper closely mirror the behavior of the tree listener built into current version of Anltr, but incorporating this tool would allow for modularity and reuse difficult to achieve elsewhere. Indeed, one of the main allures (ignoring the improvements to the core parsing algorithm [CITE]) is the ability to keep grammars separate from the application specific -- moving handling of semantic actions (normally embedded within a grammar) up into a completely separated module that extends either the automatically generated parse tree listener, or visitor.
+
+Given the benefits of such a tool, there are several tough decisions to make regarding its incorporation into our tool chain.
+%There are several key differences between the walking technique presented in this paper, and the analogous mechanism  introduced by Antlr v4.
+%% STILL WORKING HERE.
+\begin{itemize}
+\item The first decision to make was whether or not to stick with our own representation 
+
+\end{itemize}
 
 % -----------------------------------------------------------------------------------------------
 %	Motivation
@@ -294,31 +302,92 @@ Finally, the dynamic tree walker is has reusable and maintainable. As has been c
 \section{Application Example: Code Generation}
 \vspace{-2pt}
 
-One application of the walking mechanism that has been mentioned in this paper is the code generation phase. Since development began on the RESOLVE compiler, code generation -- like the many other phases of compilation -- was hindered not only by initial design of the AST visitor, but also by the (unusually) steep set of constraints RESOLVE code generation is subject to, including the following.
+One important application of the walking mechanism described, concerns RESOLVE's technique of generating code. Since development began on the RESOLVE compiler, code generation -- like the many other phases of compilation -- was hindered not only by design of the initial  AST visitor, but also by the (unusually) steep set of constraints we require in any prospective code generation system, including the following.
 
 \begin{enumerate}
-\item \textit{Correct by construction}: Provided with successfully verified RESOLVE source-code, it falls upon the translator to model, as faithfully as possible, each construct of the source language \textit{within} the target language. This modeling process -- which strives to maintain the established correctness of the original source -- typically precludes the possibility of any sort of syntax-directed translation -- as any code generated fitting such a model inevitably ends up looking wildly different from the original source.
-\item \textit{Extensibility}: The design of the translator must allow users to relatively easily tweak the output of a given construct, add support for altogether new constructs (accounting for the rapidly developing nature of the source language), and not preclude the addition of any future target languages. This is ultimately one of the reasons we choose to perform source-to-source translation, as opposed generating byte code such as JVM or LLVM single static assignment form directly: It allows a certain level of flexibility -- leaving us free to temporarily sidestep the non-trivial problem of developing (and maintaing) a fully blown byte level interpretation of every RESOLVE construct, in favor of more fruitful, verification related avenues of research.
+\item \textit{Correct by construction}: Provided with successfully verified RESOLVE source-code, it is the translators responsibility to model, as faithfully as possible, each construct of the source language \textit{within} the target language. This modeling process -- performed to maintain the established correctness of the original source -- typically precludes the possibility of any sort of syntax-directed translation, as any code generated fitting such a model inevitably ends up looking wildly different from the original source.
+\item \textit{Extensibility}: The design of the translator must allow users to relatively easily tweak the output of a given construct, add support for altogether new constructs (accounting for the rapidly developing nature of the source language), and not preclude the addition of any future target languages. This is ultimately one of the reasons we choose to perform source-to-source translation, as opposed generating byte code such as JVM or LLVM single static assignment form directly: It allows a certain level of flexibility -- leaving us free to temporarily sidestep the non-trivial problem of developing (and maintaing) a fully blown byte level interpretation of every construct, in favor of more fruitful, verification related avenues of research.
 \item \textit{Reusability}: If two or more supported target languages share similar constructs, the (separate) modules responsible for generating code for each should not duplicate code. Rather, they would ideally be designed to share as much common translation logic as possible, typically via an abstract class or some other means. However, if this is to occur, the translator in question must be designed in such a way that it enforces a strict separation between the logic governing the collection of translation related information, and the actual formatted output of this information.
 \end{enumerate}
 
-With these requirements in place, development of a RESOLVE translator hinges on two key pieces: A mechanism for traversing RESOLVE's AST efficiently and automatically (detailed in this paper), and the ability to efficiently separate translation \textit{information collection logic} from translation \textit{output logic}. In this section, we detail -- by way of a small example -- our approach which utilizes the pre-post methods of the tree walker and the ANTLR tool \textit{StringTemplate} to help us maintain the necessary separation between the model of our translation and view responsible for output.
+In this section we detail -- by way of a small example -- our approach that combines the pre-post visit methods provided by the tree walker, with the Antlr-created templating tool, \textit{Stringtemplate}\footnote[3]{\texttt{www.theantlrguy.atlassian.net/wiki/display/ST4/StringTemplate+4+Documentation}} \cite{parr:2006}.
 
-To illustrate the general process of producing runnable C from RESOLVE, consider the following simple operation:
+\subsection{Stringtemplate Overview}
+In order to better understand the example that follows, it is useful to give a brief overview of the Stringtemplate language, including its notation, and how clients might declare and interact with template (ST) objects. A popular `definition' of a template describes it as simply a ``document with holes" that users can choose to fill with \textit{attributes}. For instance, the following is a Stringtemplate describing a RESOLVE variable declaration.
+\begin{lstlisting}
+VarDecl(name, type) ::= "Var <name> : <type>;"
+\end{lstlisting}
 
-\begin{verbatim}
-Operation Int_Do_Nothing();
-Procedure
-        Var X : Integer;
-        X := 3;
-end Nothing;
-\end{verbatim}
+In this case, \texttt{name} and \texttt{type} serve as attributes to this template, and are to be substituted where they appear within the angled braces (\texttt{<..>}) in the text. In order to interact with this template, users can obtain a reference to it, assign its attributes, and print it as follows.
 
+\begin{lstlisting}[language=java]
+//A 'group' is collection of templates defined in an external file
+ST variableDecl = myGroup.getInstanceOf("VarDecl"); 
+
+//We fill in the attributes for 'name' and 'type'
+variableDecl.add("name", "X");
+variableDecl.add("type", "Integer");		     
+
+//Then render the overall template (ST) and print the resulting string
+System.out.println(variableDecl.render());
+
+//Result:
+>$ Var X : Integer;
+\end{lstlisting}
+
+If however we wanted to modify our variable declaration template to correctly account for a declaration involving two or more variables of the same type, we could simply change the template to read as follows:
+\begin{lstlisting}
+VarDecl(name, type) ::= "Var <name; separator = ","> : <type>;"
+\end{lstlisting}
+
+This small change instructs Stringtemplate to format any \textit{multi-valued} attribute passed, as a comma delimited list. For instance, replacing the addition of \texttt{name} in the section above with,
+
+\begin{lstlisting}[language=java]
+variableDecl.add("name", "X").add("name", "Y");
+\end{lstlisting}	
+
+yields the following output
+\begin{lstlisting}[language=java]
+>$ Var X, Y : Integer;
+\end{lstlisting}	
+
+This section only provides the bare minimum required to understand the discussion of translation that follows. Readers interested in learning more about this tool are encouraged to refer to \cite{parr:2004}, or \cite{parr:2006}.
+
+\subsection{RESOLVE Module Translation}
+
+To better understand the tree walker's key role in the translator, consider the following operation listed in \ref{fig:do_nothing}.
+
+\begin{figure}[!htb]
+\centering
+\begin{minipage}{.80\textwidth}
+\begin{lstlisting}
+Operation Do_Nothing(evaluates J: Integer);
+	Procedure
+		Increment(J);
+	end Do_Nothing;
+\end{lstlisting}
+\end{minipage}
+\caption{A small operation, \texttt{Do\_Nothing}, that increments its parameter, \texttt{I}.}
+\label{fig:do_nothing}
+\end{figure}
+
+There is little needed to translate this code into Java (or C) for execution. In fact, the translator class hierarchy (depicted in \ref{fig:translation_uml}) only needs to maintain global reference to a stack of in-progress templates (partially filled in \texttt{STs}), and the file from which to obtain new, target language specific \texttt{ST}s.
+
+\begin{figure}[!htb]
+\centering
+%\includegraphics[scale=.40]{figures/translation_uml.pdf}
+\caption{RESOLVE's translation hierarchy. Each concrete subclass of the abstract translator has an accompanying Stringtemplate group file containing all templates tailored to the target language of the class.}
+\label{fig:translation_uml}
+\end{figure}
+
+Translation itself is performed over the course of a walk of the AST that represents the code in \ref{fig:int_do_nothing}. Ideally, according to our constraints above, we would like a means of maximizing the amount of code shared between our two currently supported target languages (Java and C). 
+
+%This module 
 Shown in \ref{fig:translationflow} is a high level depiction of the steps taken in translating this operation to C. The first box depicts the AST of operation \texttt{Int\_Do\_Nothing}, where nodes are represented as boxes labeled by the constructs they contain. Throughout the walk of the tree, useful information such as the operation's name ``Int\_Do\_Nothing" are extracted from the nodes, and added as parameters to user defined templates\footnote{A template can simply be thought of as a ``document with holes" which the user choses when and how to fill.}, in this case: \texttt{c\_function\_def}.
 
 \begin{figure}
 \centering
-\includegraphics[scale=.40]{figures/ast_traversal2.pdf}
+%\includegraphics[scale=.40]{figures/ast_traversal2.pdf}
 \caption{The general flow of information from the AST (first), to user defined templates (middle), ending with formed output (last).}
 \label{fig:translationflow}
 \end{figure}
