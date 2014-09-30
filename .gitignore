@@ -4,7 +4,6 @@
 *.bbl
 *.blg
 *.log
-*.pdf
 *.out
 *.synctex
 *.bak
