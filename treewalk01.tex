@@ -58,7 +58,7 @@ Since the emergence of the first compiled, high level languages, ASTs and tree t
 
 The GNU ``compiler compiler," Bison\footnote{Bison serves as a modern successor to the original tool, YACC (Yet Another Compiler Compiler) developed in the early 1970s.} \cite{levine:1992} -- commonly referred to as a ``parser generator" -- is a tool that produces a state machine capable of recognizing sentences in a given language. By annotating rules of Bison grammars with semantic actions, users are able to construct their own specific AST representations of the underlying grammar. There are several disadvantages with this approach. The first is that Bison does not provide any built in support for automatic AST node construction or tree traversal: Users must create their own nodes, and find their own means of traversal (either with a visitor, or traditional recursive `evaluate' methods). The second disadvantage is that developers must learn a specific, specialized Bison syntax (separate from its BNF-style grammar syntax) to specify semantic actions. A third disadvantage concerns modularity: The need to annotate grammar rules with specific semantic actions inherently couples a grammar more closely to a given application. This coupling not only decreases the reusability (and generality) of a grammar, but also makes it harder to maintain over time since every change to the rules, necessitates further changes to the actions as well.
 
-Another tool that improves upon the model set by Bison is SableCC \cite{gagnon:1998}. SableCC provides the tools necessary to convert a BNF grammar into Java packages for lexing, parsing, and tree analysis. Improving on one Bison's downsides, is the tool's ability to produce default Java classes for each node in a user's AST hierarchy. The analysis package included in the tool defines an abstract class which allows for efficient and foolproof implementation of tree traversal logic. The process of parsing the code and walking the tree is all done by generated code, leaving the developer free to implement visitor methods needed in the analysis and code generation portions of the compiler. However, in order to make use of these tools, users are required to fill language's their grammar with tree transformations and other annotations needed to derive a valid AST. We once again shy away from this approach, as we would like our grammar to remain reusable and independent of any
+Another tool that improves upon the model set by Bison is SableCC \cite{gagnon:1998}. SableCC provides the tools necessary to convert a BNF grammar into Java packages for lexing, parsing, and tree analysis. Improving on one Bison's downsides, is the tool's ability to produce default Java classes for each node in a user's AST hierarchy. The analysis package included in the tool defines an abstract class which allows for efficient and foolproof implementation of tree traversal logic. The process of parsing the code and walking the tree is all done by generated code, leaving the developer free to implement visitor methods needed in the analysis and code generation portions of the compiler. However, in order to make use of these tools, users are required to fill language's their grammar with tree transformations and other annotations needed to derive a valid AST. We once again shy away from this approach, as we would like our grammar to remain reusable and independent of any FINISH
 
 % this needs disadvantages... why don't we just use this tool??
 % look up sable cc. I bet it requires grammar actions. 
@@ -72,8 +72,7 @@ Despite the maintainability, modularity, and reusability these improvements offe
 \begin{itemize}
 \item \textit{Representation concerns}: Antlr, and its automatic walking and visiting mechanisms only operate on Antlr-built parse trees, not custom ASTs. Being a project that over the years has crept closer and closer to the domain of compilers, the implications of switching representations is concerning not only from a theoretical perspective (real compilers have traditionally preferred abstract syntax over concrete), but also a practical perspective, since any switch in representation at this point would no doubt entail an an enormous re-engineering effort across all aspects of our existing system.
 
-\item \textit{Performance concerns}: Though reflection based visitors (as this paper demonstrates) offer improved flexibility and maintenance both in terms of source code (no need for \texttt{accept} methods in our AST nodes) and overall object structure (seamlessly adding new AST nodes without changing any code), there is still the lingering question of performance \cite{tanumoy:2012}.  Because our technique makes extensive use of Java reflection, the approach we present here is significantly slower than traditional visitors. NEEDS SOMETHING MORE..
-
+\item \textit{Performance concerns}: Though reflection based visitors (as this paper demonstrates) offer improved flexibility and maintenance both in terms of source code (no need for \texttt{accept} methods in our AST nodes) and overall object structure (seamlessly adding new AST nodes without changing any code), there is still the lingering question of performance \cite{tanumoy:2012}.  Because our technique makes extensive use of Java reflection, the approach we present here is significantly slower than traditional visitors. WORK.WORK.
 \end{itemize}
 
 Our current system employs a hybrid approach: We use Antlr's new, automatically generated parse tree listenining interfaces to construct our AST independent of grammar level tree transformations and actions (uphold reuse and maintainability) -- \textit{then} make use of the tree walking technique described in this paper to traverse our AST. We feel this approach affords us enough flexibility to avoid massive, compiler-wide re-writes, while still taking advantage of the newer features offered by the Antlr parsing tool.
@@ -310,7 +309,7 @@ Finally, the dynamic tree walker is has reusable and maintainable. As has been c
 \section{Application Example: Code Generation}
 \vspace{-2pt}
 
-One important application of the walking mechanism described, concerns RESOLVE's technique of generating code. Since development began on the RESOLVE compiler, code generation -- like the many other phases of compilation -- was hindered not only by design of the initial  AST visitor, but also by the (unusually) steep set of constraints we require in any prospective code generation system, including the following.
+One important application of the walking mechanism described, concerns code generation. Since development began on the RESOLVE compiler, code generation -- like the many other phases of compilation -- was hindered not only by design of the initial AST visitor, but also by the (unusually) steep set of constraints we require in any prospective code generation system, including the following.
 
 \begin{enumerate}
 \item \textit{Correct by construction}: Provided with successfully verified RESOLVE source-code, it is the translator's responsibility to model, as faithfully as possible, each construct of the source language \textit{within} the target language. This modeling process -- performed to maintain the established correctness of the original source -- typically precludes the possibility of any sort of syntax-directed translation, as any code generated fitting such a model inevitably ends up looking wildly different from the original source.
@@ -318,17 +317,17 @@ One important application of the walking mechanism described, concerns RESOLVE's
 \item \textit{Reusability}: If two or more supported target languages share similar constructs, the (separate) modules responsible for generating code for each should not duplicate code. Rather, they would ideally be designed to share as much common translation logic as possible, typically via an abstract class or some other means. However, if this is to occur, the translator in question must be designed in such a way that it enforces a strict separation between the logic governing the collection of translation related information, and the actual formatted output of this information.
 \end{enumerate}
 
-In this section we detail -- by way of a small example -- our approach that combines the pre-post visit methods provided by the tree walker, with the Antlr-authored templating tool, \textit{Stringtemplate}\footnote[3]{\texttt{www.theantlrguy.atlassian.net/wiki/display/ST4/StringTemplate+4+Documentation}} \cite{parr:2006}.
+In this section we detail -- by way of a small example -- our approach that combines the pre-post visit methods of the tree walker, with the Antlr-authored templating tool, \textit{Stringtemplate}\footnote[3]{\texttt{www.theantlrguy.atlassian.net/wiki/display/ST4/StringTemplate+4+Documentation}} \cite{parr:2006}.
 
 \subsection{Stringtemplate Overview}
-In order to better understand the example that follows, it is useful to give a brief overview of the Stringtemplate language, including its notation, and how clients might declare and interact with template (ST) objects. A popular `definition' of a template describes it as simply a ``document with holes" that users can choose to fill with \textit{attributes}. For instance, the following is a Stringtemplate describing a RESOLVE variable declaration.
+In order to better understand the example that follows, we provide a brief overview of the Stringtemplate language, emphasizing its notation, and usage. A popular `definition' of a template describes it simply as a ``document with holes" that users can choose to fill with \textit{attributes}. For instance, the following is a template describing a RESOLVE variable declaration.
 \begin{lstlisting}
 VarDecl(name, type) ::= "Var <name> : <type>;"
 \end{lstlisting}
 
-In this case, \texttt{name} and \texttt{type} serve as attributes to this template, and are to be substituted where they appear within the angled braces (\texttt{<..>}) in the text. In order to interact with this template, users can obtain a reference to it, assign its attributes, and print it as follows.
+In this case, \texttt{name} and \texttt{type} serve as attributes to this template, and are to be substituted where they appear within the angled braces (\texttt{<..>}) in the text. In order to interact with this template, users can obtain a reference to it, assign its attributes, and print it out -- demonstrated in Listing \ref{listing:stringtemplate_fill}.
 
-\begin{lstlisting}[language=java]
+\begin{lstlisting}[caption={Basic template manipulation.},label={listing:stringtemplate_fill}]
 //A 'group' is collection of templates defined in an external file
 ST variableDecl = myGroup.getInstanceOf("VarDecl"); 
 
@@ -343,68 +342,108 @@ System.out.println(variableDecl.render());
 >$ Var X : Integer;
 \end{lstlisting}
 
-If however we wanted to modify our variable declaration template to correctly account for a declarations involving two or more variables of the same type, we could simply change the template to read as follows:
+If however we wanted to modify our template to correctly account for declarations involving two or more variables of the same type, we could simply tweak the template's definition to read as follows.
+
 \begin{lstlisting}
-VarDecl(name, type) ::= "Var <name; separator = ", "> : <type>;"
+VarDecl(name, type) ::= "Var <name; separator = ', '> : <type>;"
 \end{lstlisting}
 
-This small change instructs Stringtemplate to format any \textit{multi-valued} attribute passed, as a comma delimited list. For instance, replacing the addition of \texttt{name} in the section above with,
+This small change instructs Stringtemplate to interpret any \textit{multi-valued} attribute passed as a comma delimited list. For instance, if the addition of \texttt{name} in the previous example was replaced with,
 
 \begin{lstlisting}[language=java]
 variableDecl.add("name", "X").add("name", "Y");
 \end{lstlisting}	
 
-yields the following output
+Stringtemplate would yield the following output.
 \begin{lstlisting}[language=java]
 >$ Var X, Y : Integer;
-\end{lstlisting}	
+\end{lstlisting}
 
-This section only provides the bare minimum required to understand the discussion of translation that follows. Readers interested in learning more about this tool are encouraged to refer to \cite{parr:2004}, or \cite{parr:2006}.
+This section only provides readers with the bare minimum knowledge required to understand the discussion of translation that follows. Readers interested in learning more about this tool are encouraged to refer to \cite{parr:2006} or \cite{parr:2004}.
 
 \subsection{RESOLVE Module Translation}
 
-To better understand the tree walker's key role in the translator, consider the following operation listed in \ref{fig:do_nothing}.
+To better understand the tree walker's key role in RESOLVE's code generation, we consider the trivial operation in Listing \ref{listing:example_operation}.
 
-\begin{figure}[!htb]
-\centering
-\begin{minipage}{.80\textwidth}
-\begin{lstlisting}
-Operation Do_Nothing(evaluates J: Integer);
-	Procedure
-		Increment(J);
-	end Do_Nothing;
+\begin{lstlisting}[caption={A RESOLVE example operation.},label={listing:example_operation}]
+Operation Foo(evaluates J: Integer);
+Procedure
+	Bar(J);
+end Foo;
 \end{lstlisting}
-\end{minipage}
-\caption{A small operation, \texttt{Do\_Nothing}, that increments its parameter, \texttt{I}.}
-\label{fig:do_nothing}
-\end{figure}
 
-There is little needed to translate this code into Java (or C) for execution. In fact, the translator class hierarchy (depicted in \ref{fig:translation_uml}) only needs to maintain global reference to a stack of in-progress templates (partially filled in \texttt{STs}), and the file from which to obtain new, target language specific \texttt{ST}s.
+There is little needed to translate \texttt{Foo} into Java (or C) for execution. In fact, the translator class hierarchy (depicted in Figure \ref{fig:translation_uml}) only needs to maintain global reference to a stack of partially filled in, intermediate templates representing various levels traversed of the AST, and the file from which to obtain new, target-language specific templates.
 
 \begin{figure}[!htb]
 \centering
-%\includegraphics[scale=.40]{figures/translation_uml.pdf}
-\caption{RESOLVE's translation hierarchy. Each concrete subclass of the abstract translator has an accompanying Stringtemplate group file containing all templates tailored to the target language of the class.}
+\includegraphics[scale=.40]{figures/translation_uml.pdf}
+\caption{RESOLVE's translation hierarchy. Each concrete subclass of the abstract translator has an accompanying, dedicated Stringtemplate group file containing all templates tailored to the target language of the class.}
 \label{fig:translation_uml}
 \end{figure}
 
-Translation itself is performed over the course of a walk of the AST that represents the code in \ref{fig:int_do_nothing}. Ideally, according to our constraints above, we would like a means of maximizing the amount of code shared between our two currently supported target languages (Java and C). 
+The first step we take in this process is to define a set of templates which -- when rendered -- output a Java representation of the original RESOLVE code. Listing \ref{listing:required_templates} summarizes all the templates we require, including those for functions, parameters, calls, variable arguments, and, at the most granular: (potentially) qualified types.\footnote{It turns out that many templates as they appear in Listing \ref{listing:required_templates} (such as\texttt{FunctionDefinition}), are suitable for both Java and C output. Thus, to avoid duplication at the template-level, we actually declare templates such as these in a separate template group file that plays the role of an `abstract-template-group,' from which our dedicated C and Java groups inherit.}.
 
-%This module 
-Shown in \ref{fig:translationflow} is a high level depiction of the steps taken in translating this operation to C. The first box depicts the AST of operation \texttt{Int\_Do\_Nothing}, where nodes are represented as boxes labeled by the constructs they contain. Throughout the walk of the tree, useful information such as the operation's name ``Int\_Do\_Nothing" are extracted from the nodes, and added as parameters to user defined templates\footnote{A template can simply be thought of as a ``document with holes" which the user choses when and how to fill.}, in this case: \texttt{c\_function\_def}.
+\begin{lstlisting}[caption={Templates required for translation of our example. Note: Templates wrapped by ``\texttt{<<..>>}" indicate that whitespace, newlines, and tabs are to be preserved.},label={listing:required_templates}]
+//functions
+FunctionDefinition(name, type, parameters, vars, statements) ::= <<			
+public <type> <name> (<parameters; sep=', '>) {
+	<statements; separator='\n'>
+}>>
+
+//parameter declarations
+ParameterDecl(type, name) ::= "<type> <name>"
+
+//call statements
+CallStmt(qualifier, name, args) ::= "<if(qualifier)>.<endif><name>(<args; sep=', '>);"
+
+//variable expressions
+VarExp(qualifier, name) ::= "<name>"
+
+//type
+type(qualifier, name) ::= "<if(qualifier)>.<endif><name>"
+\end{lstlisting}
+
+It's now up to the Java Translator to completely ``fill" the \texttt{name}, return \texttt{type}, \texttt{parameters}, and \texttt{statements} attributes of the \texttt{FunctionDefinition} template -- either using strings, or other filled-in, templates. One effective way to do so -- that we now demonstrate -- involves simply using a stack, and the tree walker's pre-post traversal. 
 
 \begin{figure}
 \centering
-%\includegraphics[scale=.40]{figures/ast_traversal2.pdf}
-\caption{The general flow of information from the AST (first), to user defined templates (middle), ending with formed output (last).}
-\label{fig:translationflow}
+\includegraphics[scale=.50]{figures/translation_table.pdf}
+\caption{A table illustrating the translation of operation \texttt{Foo}. MORE}
+\label{fig:translation_flow}
 \end{figure}
 
-In the context of RESOLVE to C translation, these templates, when filled during the aforementioned pre-post visitor traversal of RESOLVE's AST, help simplify the task of producing arbitrarily complicated, nested blocks of structured C output by keeping translation logic strictly with the C translator, and output logic strictly within the templates.
+The table depicted in Figure \ref{fig:translation_flow} illustrates both the order and state of the translation template stack over the course of the AST's traversal. At every stage of translation, the top of this stack maintains a reference to the template actively being built, or added to, while the bottom always refers to the result (or, the outermost enclosing template that is to be rendered upon completion). 
 
-That is, the only actual work being performed within the C translator is forwarding information collected from individual \texttt{ResolveConceptualElement}s, to a series of externally defined templates. This allows us to exploit (in design pattern parlance) a strict model view controller (MVC) separation in the translator's codebase between the mechanism that does the AST visiting (controller), the individual \texttt{ResolveConceptualElement}s from which we're adding information to templates (model), and the external file containing all available C language templates which shape our output (view) \cite{krasner:1988}.
+Thus, translation of any given for any given target language is performed as follows:
+\begin{enumerate}
+\item In the context of a pre$C$ visitor method (where $C$ corresponds to some RESOLVE construct), we first retrieve $C$'s corresponding template, $T$, from the current translation subclass's template group file. We then pass any easily obtainable information from $C$'s AST node into $T$ as attributes. Finally, we push $T$ onto the global template stack.
 
-We feel the approach to tree walking in the paper lends itself well to this strategy of translation, as this separation allows us to easily iterate changes to our generated C (or Java!) code without needing to concern ourselves with the compiler or translator itself.
+\item Over course of traversing $C$'s children, we modify the top of this stack arbitrarily -- filling in any additional attributes. However, in the event that a child, $C'$, is as complicated as $C$, we perform the same steps as in (1), pushing a new template $T'$ representing $C'$ onto the stack, and walking its respective children.
+
+\item In post visitor methods (post$C$), we simply pop the completed entry off the stack, and either print it out (if we're done) or add it as an appropriate attribute to the new/current top of the stack.
+\end{enumerate}
+
+We have found the tree walker to be an invaluable asset to this process, as not only does the pre and post for each construct allow us to produce arbitrarily complicated, nested block of structured output, but also provides a valuable context that allows us to keep translation forwarding logic separate from the nitty, gritty details of output. 
+
+In summary, the only actual work being performed within the translator is forwarding information collected from individual \texttt{ResolveConceptualElement}s, to a series of externally defined templates. This allows us to exploit (in design pattern parlance) a strict model view controller (MVC) separation in the translator's codebase between the mechanism that does the AST visiting (controller), the individual \texttt{ResolveConceptualElement}s from which we're forwarding information to templates (model), and the external file containing all available C or Java language templates which shape our output (view) \cite{parr:2004,krasner:1988}.
+
+%Translation itself is performed over the course of a walk of the AST that represents the code in \ref{fig:int_do_nothing}. Ideally, according to our constraints above, we would like a means of maximizing the amount of code shared between our two currently supported target languages (Java and C). 
+
+%This module 
+%Shown in \ref{fig:translationflow} is a high level depiction of the steps taken in translating this operation to C. The first box depicts the AST of operation \texttt{Int\_Do\_Nothing}, where nodes are represented as boxes labeled by the constructs they contain. Throughout the walk of the tree, useful information such as the operation's name ``Int\_Do\_Nothing" are extracted from the nodes, and added as parameters to user defined templates, in this case: \texttt{c\_function\_def}.
+
+%\begin{figure}
+%\centering
+%\includegraphics[scale=.40]{figures/ast_traversal2.pdf}
+%\caption{The general flow of information from the AST (first), to user defined templates (middle), ending with formed output (last).}
+%\label{fig:translationflow}
+%\end{figure}
+
+%In the context of RESOLVE to C translation, these templates, when filled during the aforementioned pre-post visitor traversal of RESOLVE's AST, help simplify the task of producing arbitrarily complicated, nested blocks of structured C output by keeping translation logic strictly with the C translator, and output logic strictly within the templates.
+
+%
+
+%We feel the approach to tree walking in the paper lends itself well to this strategy of translation, as this separation allows us to easily iterate changes to our generated C (or Java!) code without needing to concern ourselves with the compiler or translator itself.
 
 % -----------------------------------------------------------------------------------------------
 %	Conclusion
