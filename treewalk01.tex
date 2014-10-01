@@ -453,6 +453,8 @@ In summary, the only actual work being performed within the translator is forwar
 
 \section{Conclusion}
 
+Reengineering legacy code can be a time-consuming and often encumbering task for long-running software projects. Typical solutions to this problem involve stark tradoffs--refactor the legacy code at a short-term development cost or implement a quick work-around which delays the problem into the future. In our case, where the problematic code involved a misapplied visitor pattern, we were able to leverage the unique capabilities of Java reflection to minimize the tradeoffs of each conventional approach. Our dynamic tree walker is a quickly implementable solution that also yields long-term benefits for ongoing development.
+
 % -----------------------------------------------------------------------------------------------
 %	Acknowledgments
 % -----------------------------------------------------------------------------------------------
